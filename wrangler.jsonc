@@ -11,12 +11,11 @@
   "observability": {
     "enabled": true
   },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "kareba-db",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
-      "migrations_dir": "migrations/d1"
+ "d1_databases": [
+  {
+    "binding": "DB",
+    "database_name": "kareba-db",
+    "database_id": "e3b3dfa3-bb4f-49ce-91c5-30e02cce941d"
     }
   ],
   "vars": {
