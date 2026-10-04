@@ -1,0 +1,64 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Chart of Accounts (Rekening) for Pemerintah Daerah
+// Reference: Permendagri Nomor 90 Tahun 2019 beserta pemutakhirannya
+model Rekening {
+  id        Int      @id @default(autoincrement())
+  kategori  String   // "Belanja" | "Pendapatan" | "Pembiayaan"
+  kode      String   // e.g. "5.1.01.01.001"
+  uraian    String   // account name
+  deskripsi String   @default("") // description
+  contoh    String   @default("--") // example / ketentuan
+  createdAt DateTime @default(now())
+
+  @@index([kategori])
+  @@index([kode])
+}
+
+// Metadata for sync status
+model SyncLog {
+  id        Int      @id @default(autoincrement())
+  kategori  String
+  rowCount  Int
+  status    String   // "success" | "error"
+  message   String   @default("")
+  createdAt DateTime @default(now())
+}
+
+// Admin credential store (single row, id = 1).
+// When this exists, login checks against passwordHash and ignores the
+// env ADMIN_PASSWORD default. Allows the admin to change their password
+// from the UI.
+model AdminCredential {
+  id           Int      @id @default(1)
+  passwordHash String
+  updatedAt    DateTime @updatedAt
+}

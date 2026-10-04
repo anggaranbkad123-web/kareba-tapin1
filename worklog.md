@@ -146,3 +146,43 @@ Stage Summary:
 - Diganti dengan referensi resmi: "Permendagri Nomor 90 Tahun 2019 tentang Klasifikasi, Kodefikasi, dan Nomenklatur Perencanaan Pembangunan dan Keuangan Daerah beserta pemutakhirannya."
 - Referensi muncul di 3 tempat: kartu "Referensi / Dasar Hukum" yang menonjol di halaman utama, footer, dan metadata description.
 - Catatan: URL fetch internal (SOURCE_BASE) tetap dipertahankan sebagai mekanisme teknis pengambilan data, tetapi tidak pernah ditampilkan ke user.
+
+---
+Task ID: 4
+Agent: main (Z.ai Code)
+Task: User memilih deploy ke Cloudflare Pages. Siapkan project untuk deploy ke Cloudflare Pages (Next.js + Prisma + SQLite harus diadaptasi karena Cloudflare tidak punya filesystem persisten).
+
+Work Log:
+- Install paket: @opennextjs/cloudflare@1.20.8, @prisma/adapter-d1@7.10.0, wrangler@4.147.0 (dev).
+- Buat open-next.config.ts (defineCloudflareConfig, incrementalCache:false).
+- Buat wrangler.jsonc: name "kareba", main ".open-next/worker.js", compatibility_flags ["nodejs_compat"], assets binding ASSETS, d1_databases binding "DB" (database_id placeholder), vars ADMIN_PASSWORD & ADMIN_SECRET.
+- Update next.config.ts: tambah initOpenNextCloudflareForDev() via dynamic import dengan try/catch fallback (agar dev lokal tetap jalan walau D1 belum dikonfigurasi). Catatan: import path benar adalah "@opennextjs/cloudflare" (bukan "/dev"), function ada di cloudflare-context.js.
+- Update prisma/schema.prisma: hapus previewFeatures driverAdapters (sudah stabil di Prisma 6).
+- Update src/lib/db.ts jadi env-aware:
+  * isCloudflare() cek process.env.CF_PAGES.
+  * getDb() async: di Cloudflare → dynamic import @opennextjs/cloudflare getCloudflareContext + @prisma/adapter-d1 PrismaD1(env.DB); lokal → cached PrismaClient(SQLite).
+  * Export sync `db` proxy untuk backward-compat lokal (throw di Cloudflare jika dipakai langsung).
+- Migrasi SEMUA route handler & lib dari `import { db }` ke `const db = await getDb()`:
+  * src/lib/admin-auth.ts (verifyAdminPassword, setAdminPassword)
+  * src/lib/rekening-source.ts (syncRekeningData, batch size 1000→500 untuk D1)
+  * src/app/api/rekening/route.ts (GET, POST)
+  * src/app/api/rekening/[id]/route.ts (PUT, DELETE)
+  * src/app/api/stats/route.ts (GET)
+  * src/app/api/auth/change-password/route.ts sudah pakai verifyAdminPassword/setAdminPassword (sudah async, tidak perlu ubah).
+- Buat migrations/d1/0001_init.sql: skema lengkap (Rekening + index, SyncLog, AdminCredential, User, Post) untuk D1.
+- Buat scripts/seed-d1.mjs: seed 15.286 baris ke D1 via `wrangler d1 execute` (batch 200, support --local & --remote).
+- Update package.json scripts: preview, deploy, cf-typegen, d1:migrate:{local,remote}, d1:seed:{local,remote}.
+- Update .gitignore: tambah .open-next/, .wrangler/, worker-configuration.d.ts.
+- Buat .dev.vars untuk wrangler dev (ADMIN_PASSWORD, ADMIN_SECRET).
+- Buat DEPLOY.md: panduan 7 langkah lengkap (login, create D1, migrate, seed, secret, deploy, verify) + troubleshooting + tabel perintah.
+- Regenerate Prisma client (db:generate) — sukses.
+- Lint bersih.
+- Verifikasi dev server lokal: HTTP 200, GET /api/stats 200, GET /api/rekening 200, GET / 200, page render "KAREBA" tanpa error, 0 browser errors. Semua API berfungsi dengan getDb() baru (fallback ke SQLite lokal otomatis).
+
+Stage Summary:
+- Project KAREBA sekarang siap deploy ke Cloudflare Pages.
+- Arsitektur env-aware: local dev pakai SQLite file (tidak berubah), production Cloudflare pakai D1 serverless via PrismaD1 adapter.
+- Semua route handler sudah async `getDb()`, proxy `db` sync tetap ada untuk backward-compat lokal.
+- File baru: open-next.config.ts, wrangler.jsonc, migrations/d1/0001_init.sql, scripts/seed-d1.mjs, .dev.vars, DEPLOY.md.
+- File diubah: next.config.ts, prisma/schema.prisma, src/lib/db.ts, src/lib/admin-auth.ts, src/lib/rekening-source.ts, src/app/api/{rekening,rekening/[id],stats}/route.ts, package.json, .gitignore.
+- User cukup ikuti DEPLOY.md: wrangler login → buat D1 → migrate → seed → set secret → `bun run deploy` → dapat URL shareable.
